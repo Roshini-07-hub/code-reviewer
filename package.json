@@ -1,0 +1,22 @@
+{
+  "name": "ai-code-reviewer",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Full-stack AI-powered automated code reviewer with React, Express, MongoDB Atlas, and OpenAI.",
+  "scripts": {
+    "dev": "concurrently \"npm run dev --workspace backend\" \"npm run dev --workspace frontend\"",
+    "install:all": "npm install --workspaces",
+    "build": "npm run build --workspace frontend",
+    "start": "npm run start --workspace backend"
+  },
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "overrides": {
+    "dompurify": "^3.4.5"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

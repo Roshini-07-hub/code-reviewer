@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: ai-code-reviewer-api
+    env: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-5.2
+      - key: CLIENT_ORIGIN
+        sync: false
