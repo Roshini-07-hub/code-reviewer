@@ -10,12 +10,22 @@ import { errorHandler } from './middleware/error.js';
 const app = express();
 
 app.use(helmet());
-app.use(
-  cors({
-    origin: process.env.CLIENT_ORIGIN?.split(',') || 'http://localhost:5173',
-    credentials: true
-  })
-);
+const clientOrigins = process.env.CLIENT_ORIGIN?.split(',').map((origin) => origin.trim()).filter(Boolean);
+const allowAllOrigins = clientOrigins?.includes('*') || clientOrigins?.includes('all');
+const corsOptions = {
+  origin: allowAllOrigins
+    ? true
+    : function (origin, callback) {
+        if (!origin) return callback(null, true);
+        if (clientOrigins.includes(origin)) return callback(null, true);
+        callback(new Error(`Origin ${origin} not allowed by CORS`));
+      },
+  credentials: true
+};
+
+console.log('CORS allowed origins:', allowAllOrigins ? 'all' : clientOrigins || ['http://localhost:5173']);
+
+app.use(cors(corsOptions));
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
