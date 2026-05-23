@@ -11,9 +11,11 @@ services:
         value: production
       - key: MONGODB_URI
         sync: false
-      - key: OPENAI_API_KEY
+      - key: GROQ_API_KEY
         sync: false
-      - key: OPENAI_MODEL
-        value: gpt-5.2
+      - key: GROQ_MODEL
+        value: llama-3.3-70b-versatile
+      - key: GROQ_API_URL
+        value: https://api.groq.com/openai/v1
       - key: CLIENT_ORIGIN
         sync: false

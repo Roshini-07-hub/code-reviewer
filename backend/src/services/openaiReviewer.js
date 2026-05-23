@@ -29,14 +29,18 @@ const ReviewSchema = z.object({
 export async function reviewCode({ code, language, filename }) {
   const fallback = analyzeStatically(code);
 
-  const apiKey = process.env.OPENAI_API_KEY || process.env.GROQ_API_KEY;
+  const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) {
+    console.warn('GROQ_API_KEY missing; using static fallback analysis.');
     return { ...fallback, model: 'static-fallback' };
   }
 
   try {
-    const client = new OpenAI({ apiKey });
-    const model = process.env.OPENAI_MODEL || 'gpt-5.2';
+    const client = new OpenAI({
+      apiKey,
+      baseURL: process.env.GROQ_API_URL || 'https://api.groq.com/openai/v1'
+    });
+    const model = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
     const response = await client.responses.create({
       model,
       input: [
