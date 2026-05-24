@@ -2,6 +2,7 @@
   "name": "ai-code-reviewer",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "description": "Full-stack AI-powered automated code reviewer with React, Express, MongoDB Atlas, and OpenAI.",
   "scripts": {
     "dev": "concurrently \"npm run dev --workspace backend\" \"npm run dev --workspace frontend\"",
