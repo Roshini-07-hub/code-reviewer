@@ -11,7 +11,6 @@ import { isDbConnected } from './config/db.js';
 
 const app = express();
 
-app.set('trust proxy', 1);
 app.use(helmet());
 const defaultClientOrigins = ['http://localhost:5173', 'http://127.0.0.1:5173', 'http://0.0.0.0:5173'];
 const clientOrigins = [
@@ -25,7 +24,6 @@ const corsOptions = {
     : function (origin, callback) {
         if (!origin) return callback(null, true);
         if (clientOrigins.includes(origin)) return callback(null, true);
-        if (/^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(origin)) return callback(null, true);
         callback(new Error(`Origin ${origin} not allowed by CORS`));
       },
   credentials: true
