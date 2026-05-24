@@ -13,10 +13,10 @@ import { requireAuth } from '../middleware/auth.js';
 
 const router = Router();
 
+router.post('/realtime', realtimeReview);
 router.use(requireAuth);
 router.post('/', createReview);
 router.get('/', listReviews);
-router.post('/realtime', realtimeReview);
 router.get('/:id', getReview);
 router.get('/:id/pdf', exportReviewPdf);
 router.delete('/:id', deleteReview);

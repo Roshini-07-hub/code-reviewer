@@ -12,11 +12,15 @@ const port = process.env.PORT || 8080;
 
 connectDb()
   .then(() => {
-    app.listen(port, () => {
-      console.log(`API listening on port ${port}`);
-    });
+    startServer();
   })
   .catch((error) => {
-    console.error('Failed to start server', error);
-    process.exit(1);
+    console.error('MongoDB connection failed; starting API with database-backed routes unavailable:', error.message);
+    startServer();
   });
+
+function startServer() {
+  app.listen(port, () => {
+    console.log(`API listening on port ${port}`);
+  });
+}

@@ -59,6 +59,7 @@ export async function reviewCode({ code, language, filename }) {
 
     const text = response.output_text || response.output?.[0]?.content?.[0]?.text;
     const parsed = ReviewSchema.parse(JSON.parse(text));
+    parsed.scores = normalizeScores(parsed.scores);
     parsed.findings = mergeFindings(parsed.findings, fallback.findings);
 
     return {
@@ -73,6 +74,18 @@ export async function reviewCode({ code, language, filename }) {
     console.error('OpenAI review failed, using static fallback:', error.message);
     return { ...fallback, model: 'static-fallback' };
   }
+}
+
+function normalizeScores(scores) {
+  const values = Object.values(scores);
+  const usesUnitScale = values.length > 0 && values.every((value) => value >= 0 && value <= 1);
+
+  return Object.fromEntries(
+    Object.entries(scores).map(([key, value]) => {
+      const normalized = usesUnitScale ? value * 100 : value;
+      return [key, Math.max(0, Math.min(100, Math.round(normalized)))];
+    })
+  );
 }
 
 function mergeFindings(aiFindings, staticFindings) {

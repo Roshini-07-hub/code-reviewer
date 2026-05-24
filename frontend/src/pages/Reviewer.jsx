@@ -8,6 +8,14 @@ import ScoreCard from '../components/ScoreCard.jsx';
 import { analyzeLocally } from '../utils/staticAnalyzer.js';
 
 const starterCode = '';
+const languages = [
+  { value: 'javascript', label: 'JavaScript' },
+  { value: 'typescript', label: 'TypeScript' },
+  { value: 'python', label: 'Python' },
+  { value: 'java', label: 'Java' },
+  { value: 'csharp', label: 'C#' },
+  { value: 'cpp', label: 'C++' }
+];
 
 export default function Reviewer() {
   const navigate = useNavigate();
@@ -18,6 +26,7 @@ export default function Reviewer() {
   const [preview, setPreview] = useState(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const effectiveLanguage = useMemo(() => detectLanguage({ code, filename, language }), [code, filename, language]);
 
   useEffect(() => {
     const handle = setTimeout(async () => {
@@ -28,7 +37,7 @@ export default function Reviewer() {
 
       setLoading(true);
       try {
-        const { data } = await api.post('/reviews/realtime', { code, language, filename: filename || 'editor-buffer' });
+        const { data } = await api.post('/reviews/realtime', { code, language: effectiveLanguage, filename: filename || `editor-buffer.${extensionForLanguage(effectiveLanguage)}` });
         setPreview(data);
       } catch (_error) {
         setPreview(analyzeLocally(code));
@@ -38,7 +47,7 @@ export default function Reviewer() {
     }, 900);
 
     return () => clearTimeout(handle);
-  }, [code, language, filename]);
+  }, [code, effectiveLanguage, filename]);
 
   const markers = useMemo(() => preview?.findings || [], [preview]);
 
@@ -48,8 +57,7 @@ export default function Reviewer() {
 
     const name = file.name;
     setFilename(name);
-    const extension = name.split('.').pop();
-    setLanguage(extension === 'py' ? 'python' : extension === 'ts' ? 'typescript' : 'javascript');
+    setLanguage(languageFromFilename(name) || 'javascript');
     file.text().then(setCode);
   }
 
@@ -58,8 +66,8 @@ export default function Reviewer() {
     try {
       const { data } = await api.post('/reviews', {
         title: title.trim() || 'New review',
-        filename: filename.trim() || 'untitled.js',
-        language,
+        filename: filename.trim() || `untitled.${extensionForLanguage(effectiveLanguage)}`,
+        language: effectiveLanguage,
         code
       });
       navigate(`/reviews/${data.review._id}`);
@@ -71,7 +79,7 @@ export default function Reviewer() {
   return (
     <div className="grid gap-5 xl:grid-cols-[1fr_420px]">
       <section className="overflow-hidden rounded border border-line bg-panel">
-        <div className="grid gap-3 border-b border-line p-4 md:grid-cols-[1fr_180px_170px_auto]">
+        <div className="grid gap-3 border-b border-line p-4 md:grid-cols-[1fr_180px_150px_140px]">
           <input
             value={title}
             placeholder="Review title"
@@ -84,6 +92,17 @@ export default function Reviewer() {
             onChange={(event) => setFilename(event.target.value)}
             className="h-10 rounded border border-line bg-ink px-3 outline-none focus:border-accent"
           />
+          <select
+            value={language}
+            onChange={(event) => setLanguage(event.target.value)}
+            className="h-10 rounded border border-line bg-ink px-3 outline-none focus:border-accent"
+          >
+            {languages.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
           <label className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded border border-line bg-ink px-3 text-sm hover:border-accent hover:bg-white/5">
             <FileUp size={16} />
             Upload
@@ -94,7 +113,7 @@ export default function Reviewer() {
         <Editor
           height="68vh"
           theme="vs-dark"
-          language={language}
+          language={effectiveLanguage}
           value={code}
           onChange={(value) => setCode(value || '')}
           options={{ minimap: { enabled: false }, fontSize: 14, scrollBeyondLastLine: false, wordWrap: 'on' }}
@@ -153,4 +172,40 @@ export default function Reviewer() {
       </aside>
     </div>
   );
+}
+
+function languageFromFilename(name) {
+  const extension = name.split('.').pop()?.toLowerCase();
+  if (extension === 'py') return 'python';
+  if (extension === 'ts' || extension === 'tsx') return 'typescript';
+  if (extension === 'java') return 'java';
+  if (extension === 'cs') return 'csharp';
+  if (['c', 'cc', 'cpp', 'cxx', 'h', 'hpp'].includes(extension)) return 'cpp';
+  if (['js', 'jsx', 'mjs', 'cjs'].includes(extension)) return 'javascript';
+  return null;
+}
+
+function extensionForLanguage(language) {
+  if (language === 'python') return 'py';
+  if (language === 'typescript') return 'ts';
+  if (language === 'java') return 'java';
+  if (language === 'csharp') return 'cs';
+  if (language === 'cpp') return 'cpp';
+  return 'js';
+}
+
+function detectLanguage({ code, filename, language }) {
+  if (filename.trim()) return languageFromFilename(filename) || language;
+
+  const trimmed = code.trim();
+  const pythonSignals = [
+    /^\s*(def|class)\s+\w+.*:/m,
+    /^\s*(import|from)\s+[\w.]+/m,
+    /^\s*(if|elif|else|for|while|try|except|with)\b.*:\s*$/m,
+    /\bprint\s*\(/,
+    /\bself\./
+  ];
+
+  if (pythonSignals.some((pattern) => pattern.test(trimmed))) return 'python';
+  return language;
 }

@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
@@ -6,11 +7,16 @@ import rateLimit from 'express-rate-limit';
 import reviewRoutes from './routes/review.routes.js';
 import analyticsRoutes from './routes/analytics.routes.js';
 import { errorHandler } from './middleware/error.js';
+import { isDbConnected } from './config/db.js';
 
 const app = express();
 
 app.use(helmet());
-const clientOrigins = process.env.CLIENT_ORIGIN?.split(',').map((origin) => origin.trim()).filter(Boolean);
+const defaultClientOrigins = ['http://localhost:5173', 'http://127.0.0.1:5173', 'http://0.0.0.0:5173'];
+const clientOrigins = [
+  ...defaultClientOrigins,
+  ...(process.env.CLIENT_ORIGIN?.split(',').map((origin) => origin.trim()).filter(Boolean) || [])
+];
 const allowAllOrigins = clientOrigins?.includes('*') || clientOrigins?.includes('all');
 const corsOptions = {
   origin: allowAllOrigins
@@ -23,7 +29,7 @@ const corsOptions = {
   credentials: true
 };
 
-console.log('CORS allowed origins:', allowAllOrigins ? 'all' : clientOrigins || ['http://localhost:5173']);
+console.log('CORS allowed origins:', allowAllOrigins ? 'all' : clientOrigins);
 
 app.use(cors(corsOptions));
 app.use(express.json({ limit: '2mb' }));
@@ -39,7 +45,7 @@ app.use(
 );
 
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, service: 'ai-code-reviewer-api' });
+  res.json({ ok: true, service: 'ai-code-reviewer-api', database: isDbConnected() ? 'connected' : 'unavailable' });
 });
 
 app.use('/api/reviews', reviewRoutes);
