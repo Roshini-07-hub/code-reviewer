@@ -41,9 +41,10 @@ export async function reviewCode({ code, language, filename }) {
       baseURL: process.env.GROQ_API_URL || 'https://api.groq.com/openai/v1'
     });
     const model = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
-    const response = await client.responses.create({
+    const response = await client.chat.completions.create({
       model,
-      input: [
+      response_format: { type: 'json_object' },
+      messages: [
         {
           role: 'system',
           content:
@@ -53,11 +54,10 @@ export async function reviewCode({ code, language, filename }) {
           role: 'user',
           content: `Review this ${language} file named ${filename}. Use 1-based line numbers. JSON schema: { "summary": string, "findings": [{ "type": "bug|security|unused-code|duplicate-code|performance|readability|maintainability", "severity": "low|medium|high|critical", "line": number, "endLine": number optional, "title": string, "message": string, "suggestedFix": string, "snippet": string }], "scores": { "security": number, "readability": number, "performance": number, "maintainability": number, "overall": number } }\n\n${code}`
         }
-      ],
-      text: { format: { type: 'json_object' } }
+      ]
     });
 
-    const text = response.output_text || response.output?.[0]?.content?.[0]?.text;
+    const text = response.choices?.[0]?.message?.content;
     const parsed = ReviewSchema.parse(JSON.parse(text));
     parsed.scores = normalizeScores(parsed.scores);
     parsed.findings = mergeFindings(parsed.findings, fallback.findings);
