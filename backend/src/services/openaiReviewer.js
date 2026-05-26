@@ -1,4 +1,6 @@
 import OpenAI from 'openai';
+import { traceable } from 'langsmith/traceable';
+import { wrapOpenAI } from 'langsmith/wrappers';
 import { z } from 'zod';
 import { analyzeStatically } from '../utils/staticAnalyzer.js';
 
@@ -26,55 +28,69 @@ const ReviewSchema = z.object({
   })
 });
 
-export async function reviewCode({ code, language, filename }) {
-  const fallback = analyzeStatically(code);
-
-  const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) {
-    console.warn('GROQ_API_KEY missing; using static fallback analysis.');
-    return { ...fallback, model: 'static-fallback' };
-  }
-
-  try {
-    const client = new OpenAI({
-      apiKey,
-      baseURL: process.env.GROQ_API_URL || 'https://api.groq.com/openai/v1'
-    });
-    const model = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
-    const response = await client.chat.completions.create({
-      model,
-      response_format: { type: 'json_object' },
-      messages: [
-        {
-          role: 'system',
-          content:
-            'You are a senior application security and performance code reviewer. Return only strict JSON matching the requested schema. Review for bugs, security vulnerabilities, unused code, duplicate code, performance issues, readability, maintainability, and concrete fixes.'
-        },
-        {
-          role: 'user',
-          content: `Review this ${language} file named ${filename}. Use 1-based line numbers. JSON schema: { "summary": string, "findings": [{ "type": "bug|security|unused-code|duplicate-code|performance|readability|maintainability", "severity": "low|medium|high|critical", "line": number, "endLine": number optional, "title": string, "message": string, "suggestedFix": string, "snippet": string }], "scores": { "security": number, "readability": number, "performance": number, "maintainability": number, "overall": number } }\n\n${code}`
-        }
-      ]
-    });
-
-    const text = response.choices?.[0]?.message?.content;
-    const parsed = ReviewSchema.parse(JSON.parse(text));
-    parsed.scores = normalizeScores(parsed.scores);
-    parsed.findings = mergeFindings(parsed.findings, fallback.findings);
-
-    return {
-      ...parsed,
-      findings: parsed.findings.map((finding, index) => ({
-        ...finding,
-        id: finding.id || `${finding.type}-${finding.line}-${index}`
-      })),
-      model
-    };
-  } catch (error) {
-    console.error('OpenAI review failed, using static fallback:', error.message);
-    return { ...fallback, model: 'static-fallback' };
-  }
+function createClient() {
+  const rawClient = new OpenAI({
+    apiKey: process.env.GROQ_API_KEY,
+    baseURL: process.env.GROQ_API_URL || 'https://api.groq.com/openai/v1'
+  });
+  // wrap with LangSmith so every chat.completions.create call is traced
+  return wrapOpenAI(rawClient);
 }
+
+export const reviewCode = traceable(
+  async function reviewCode({ code, language, filename }) {
+    const fallback = analyzeStatically(code);
+
+    const apiKey = process.env.GROQ_API_KEY;
+    if (!apiKey) {
+      console.warn('GROQ_API_KEY missing; using static fallback analysis.');
+      return { ...fallback, model: 'static-fallback' };
+    }
+
+    try {
+      const client = createClient();
+      const model = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+
+      const response = await client.chat.completions.create({
+        model,
+        response_format: { type: 'json_object' },
+        messages: [
+          {
+            role: 'system',
+            content:
+              'You are a senior application security and performance code reviewer. Return only strict JSON matching the requested schema. Review for bugs, security vulnerabilities, unused code, duplicate code, performance issues, readability, maintainability, and concrete fixes.'
+          },
+          {
+            role: 'user',
+            content: `Review this ${language} file named ${filename}. Use 1-based line numbers. JSON schema: { "summary": string, "findings": [{ "type": "bug|security|unused-code|duplicate-code|performance|readability|maintainability", "severity": "low|medium|high|critical", "line": number, "endLine": number optional, "title": string, "message": string, "suggestedFix": string, "snippet": string }], "scores": { "security": number, "readability": number, "performance": number, "maintainability": number, "overall": number } }\n\n${code}`
+          }
+        ]
+      });
+
+      const text = response.choices?.[0]?.message?.content;
+      const parsed = ReviewSchema.parse(JSON.parse(text));
+      parsed.scores = normalizeScores(parsed.scores);
+      parsed.findings = mergeFindings(parsed.findings, fallback.findings);
+
+      return {
+        ...parsed,
+        findings: parsed.findings.map((finding, index) => ({
+          ...finding,
+          id: finding.id || `${finding.type}-${finding.line}-${index}`
+        })),
+        model
+      };
+    } catch (error) {
+      console.error('Groq review failed, using static fallback:', error.message);
+      return { ...fallback, model: 'static-fallback' };
+    }
+  },
+  {
+    name: 'code-review',
+    run_type: 'chain',
+    project_name: process.env.LANGSMITH_PROJECT || 'code-review'
+  }
+);
 
 function normalizeScores(scores) {
   const values = Object.values(scores);
